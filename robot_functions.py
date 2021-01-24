@@ -1,6 +1,7 @@
 import numpy as np
 
 
+
 def sigmoid(z, a=1.0):
     # Continuous Sigmoid function returns 0 if z is negative and 1 if positive.
     # The slope is determined by a
@@ -21,6 +22,13 @@ def skew(u):
     uskew[1, :] =  [u[2], 0.0, -u[0]]
     uskew[2, :] =  [-u[1], u[0], 0.0]
     return uskew
+
+def screw_transform(L):
+    lhat = skew(L)
+    m1=np.hstack([np.eye(3),-lhat])
+    m2=np.hstack([np.zeros([3,3]), np.eye(3)])
+    s=np.vstack([m1,m2])
+    return s
 
 def sigmoid_gradient(z, a=1.0):
     # Gradient of sigmoid function
