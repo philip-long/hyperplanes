@@ -1,6 +1,7 @@
 import numpy as np
 import polytope
 import polytope_functions
+import sawyer_functions
 import robot_functions
 import matplotlib.pyplot as plt
 
@@ -152,10 +153,34 @@ def test_normalized_cross_product_gradient(limits, step):
     plt.show()
     return np.max(np.absolute(error), axis=0)  # max of each column
 
+def test_hessian(limits,step):
+    q=np.random.randn(7)
+    joint=np.random.randint(7)
+    test_domain = np.arange(limits[0], limits[1], step)
+    J=sawyer_functions.jacobianE0(q)
+    error = []
+    nm_tes=[]
+    for z in test_domain:
+        J_last=J
+
+        q[joint]=z
+        J = sawyer_functions.jacobianE0(q)
+        H=robot_functions.getHessian(J)
+        numerical_gradient = ((J-J_last) / step)
+        nm_tes.append(numerical_gradient[2,3])
+        error.append( np.linalg.norm(numerical_gradient-H[:,:,joint]))
+
+    plt.plot(nm_tes[1:], 'b')
+    plt.plot(error[1:], 'r')
+    plt.show()
+    return max(error)
+
 
 if __name__ == '__main__':
     # test_plot()
     # print("Max error sigmoid gradient",test_sigmoid_gradient([-5.0,5.0],0.001,10))
     # print("Max error of cross product gradient",test_cross_product_gradient([-1.0, 1.0], 0.0001))
     # print("Max error of norm vector gradient",test_vector_norm_gradient([-2.0, 1.0], 0.0001))
-    print("Max error of normalized cross product gradient", test_normalized_cross_product_gradient([-1.0, 1.0], 0.0001))
+    # print("Max error of normalized cross product gradient", test_normalized_cross_product_gradient([-1.0, 1.0], 0.0001))
+    print("Max error of Hessian", test_hessian([0.0, np.pi], 0.005))
+    # next function is getHyperplanes

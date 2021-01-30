@@ -1,7 +1,6 @@
 import numpy as np
 
 
-
 def sigmoid(z, a=1.0):
     # Continuous Sigmoid function returns 0 if z is negative and 1 if positive.
     # The slope is determined by a
@@ -15,30 +14,35 @@ def sigmoid(z, a=1.0):
         return z.item()
     return z
 
+
 def skew(u):
     # skew symmetric matrix performing the cross product
-    uskew=np.zeros((3,3))
-    uskew[0, :]  = [0.0, -u[2], u[1]]
-    uskew[1, :] =  [u[2], 0.0, -u[0]]
-    uskew[2, :] =  [-u[1], u[0], 0.0]
+    uskew = np.zeros((3, 3))
+    uskew[0, :] = [0.0, -u[2], u[1]]
+    uskew[1, :] = [u[2], 0.0, -u[0]]
+    uskew[2, :] = [-u[1], u[0], 0.0]
     return uskew
+
 
 def screw_transform(L):
     lhat = skew(L)
-    m1=np.hstack([np.eye(3),-lhat])
-    m2=np.hstack([np.zeros([3,3]), np.eye(3)])
-    s=np.vstack([m1,m2])
+    m1 = np.hstack([np.eye(3), -lhat])
+    m2 = np.hstack([np.zeros([3, 3]), np.eye(3)])
+    s = np.vstack([m1, m2])
     return s
+
 
 def sigmoid_gradient(z, a=1.0):
     # Gradient of sigmoid function
     g = a * sigmoid(z, a) * (1 - sigmoid(z, a))
     return g
 
-def cross_product_normalized(v1,v2):
+
+def cross_product_normalized(v1, v2):
     return np.cross(v1, v2) / np.linalg.norm(np.cross(v1, v2))
 
-def gradient_cross_product_normalized(v1,v2,dv1,dv2):
+
+def gradient_cross_product_normalized(v1, v2, dv1, dv2):
     # gradient of a cross product of two vector v1 v2 divided by its norm
     # dv1, dv2 are gradient of each vector
     # n = cross(v1,v2) / norm(cross(v1,v2))
@@ -48,23 +52,49 @@ def gradient_cross_product_normalized(v1,v2,dv1,dv2):
     #       ---------------
     #             v'*v
 
-    u=np.cross(v1,v2)
-    v=np.linalg.norm(np.cross(v1,v2))
+    u = np.cross(v1, v2)
+    v = np.linalg.norm(np.cross(v1, v2))
 
-    dudq=gradient_cross_product(v1,v2,dv1,dv2)
-    dvdq=gradient_vector_norm(u,dudq)
+    dudq = gradient_cross_product(v1, v2, dv1, dv2)
+    dvdq = gradient_vector_norm(u, dudq)
 
     dndq = ((dudq * v) - (u * dvdq)) / (v ** 2)
     return dndq
 
 
-def gradient_vector_norm(v1,dv1):
+def gradient_vector_norm(v1, dv1):
     # gradient of the norm of a vector v1 with vector gradient dv1
-    return np.dot(dv1,v1) / (np.dot(v1,v1)**0.5)
+    return np.dot(dv1, v1) / (np.dot(v1, v1) ** 0.5)
 
-def gradient_cross_product(v1,v2,dv1,dv2):
+
+def gradient_cross_product(v1, v2, dv1, dv2):
     # gradient of the cross product of two vector v1 v2
     # dv1, dv2 are gradient of each vector
     return np.matmul(-skew(v2), dv1) + np.matmul(skew(v1), dv2)
 
 
+def getHessian(J):
+    # get kinematic Hessian matrix for a robot of revolute joints
+    # Paper derivation http://dx.doi.org/10.1016/0094-114X(95)00069-B
+    # Input Jacobian  J = [v_1 v_2....v_n]  matrix of unit twists  6  x n
+    # Output Hessian Tessor (nxm) xn   H[:,:,j] = [dv_1 / dq_j dv_2 / dq_j dv_n / dq_j]
+    # H contains n matrices H[:,:,1] is the second full matrix
+    rows, cols = np.shape(J)
+    H = np.zeros([rows, cols, cols])
+    for i in range(cols):
+        for j in range(cols):
+            twist_i = J[:, i]
+            twist_j = J[:, j]
+            if i < j:
+                omega_i_hat = skew(J[3:6, i])
+                a_rows13 = np.hstack( (omega_i_hat, np.zeros([3, 3])))
+                a_rows36 = np.zeros([3, 6])
+                a = np.vstack((a_rows13, a_rows36))
+                H[:, i, j] = np.matmul(a, twist_j)
+            elif i >= j:
+                omega_j_hat = skew(J[3:6, j])
+                a_rows13 = np.hstack( (omega_j_hat, np.zeros([3, 3])))
+                a_rows36 = np.hstack( (np.zeros([3, 3]), omega_j_hat))
+                a = np.vstack([a_rows13, a_rows36])
+                H[:, i, j] = np.matmul(a, twist_i)
+    return H

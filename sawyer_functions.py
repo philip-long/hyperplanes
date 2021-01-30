@@ -7415,3 +7415,11 @@ def jacobian70(q):
     jaco_b_l6 = np.delete(jaco_b_l6, 0, 1)
     jacobian_sawyer = np. matmul(screw_transform_6n,jaco_b_l6)
     return jacobian_sawyer
+
+def jacobianE0(q):
+    end_effector_offset=np.array([0.55,0.0,0.0])
+    J=jacobian70(q)
+    T=transform_70(q)
+    S=robot_functions.screw_transform(np.matmul(T[0:3,0:3],end_effector_offset))
+    Je=np.matmul(S,J)
+    return Je
