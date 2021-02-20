@@ -18,6 +18,82 @@ def test_plot():
     print("desired_twist vertices=", V)
     polytope_functions.plot_polytope_3d(desired_twist)
 
+def test_smooth_min_gradient(limits, step):
+    coeffs_rands = np.random.randn(5, ) * 10
+    test_domain = np.arange(limits[0], limits[1], step)
+    num_max=0
+    smooth_max=0
+
+    analytical_gradient_list=[]
+    numerical_gradient_list=[]
+    error=[]
+
+    first_iteration = True
+    for z in test_domain:
+        num_max_m1=num_max
+        smooth_max_m1=smooth_max
+
+        v1 = np.array([(z ** 2) + (coeffs_rands[1] * z), (-6 * (z ** 2)) + (12 * z), coeffs_rands[0] * z])
+        dv1 = np.array([(2 * z) + coeffs_rands[1], (-12 * z) + 12, coeffs_rands[0]])
+
+        num_max=np.min(v1)
+        smooth_max=robot_functions.smooth_max(-v1)
+        print("smooth_min",-smooth_max,num_max)
+
+        if not first_iteration:
+            analytical_gradient = robot_functions.exp_normalize(-v1)
+            analytical_gradient_scalar=analytical_gradient[np.argmin(v1)]*dv1[np.argmin(v1)]
+
+            numerical_gradient = ((num_max- num_max_m1) / step)
+
+            analytical_gradient_list.append(analytical_gradient_scalar)
+            numerical_gradient_list.append(numerical_gradient)
+            error.append(analytical_gradient_scalar - numerical_gradient)
+        first_iteration = False
+
+    plt.plot(error)
+    plt.plot(analytical_gradient_list, 'r')
+    plt.plot(numerical_gradient_list, 'g')
+    plt.show()
+
+def test_smooth_max_gradient(limits, step):
+    coeffs_rands = np.random.randn(5, ) * 10
+    test_domain = np.arange(limits[0], limits[1], step)
+    num_max=0
+    smooth_max=0
+
+    analytical_gradient_list=[]
+    numerical_gradient_list=[]
+    error=[]
+
+    first_iteration = True
+    for z in test_domain:
+        num_max_m1=num_max
+        smooth_max_m1=smooth_max
+
+        v1 = np.array([(z ** 2) + (coeffs_rands[1] * z), (-6 * (z ** 2)) + (12 * z), coeffs_rands[0] * z])
+        dv1 = np.array([(2 * z) + coeffs_rands[1], (-12 * z) + 12, coeffs_rands[0]])
+
+        num_max=np.max(v1)
+        smooth_max=robot_functions.smooth_max(v1)
+        print("smooth_max",smooth_max,num_max)
+
+        if not first_iteration:
+            analytical_gradient = robot_functions.exp_normalize(v1)
+            analytical_gradient_scalar=analytical_gradient[np.argmax(v1)]*dv1[np.argmax(v1)]
+
+            numerical_gradient = ((np.max(v1) - num_max_m1) / step)
+
+            analytical_gradient_list.append(analytical_gradient_scalar)
+            numerical_gradient_list.append(numerical_gradient)
+            error.append(analytical_gradient_scalar - numerical_gradient)
+        first_iteration = False
+
+    plt.plot(error)
+    plt.plot(analytical_gradient_list, 'r')
+    plt.plot(numerical_gradient_list, 'g')
+    plt.show()
+
 
 def test_sigmoid_gradient(limits, step, a):
     x_n = 0
@@ -44,7 +120,7 @@ def test_sigmoid_gradient(limits, step, a):
 def test_cross_product_gradient(limits, step):
     v1_cross_v2 = np.zeros(3, )
 
-    rands = np.random.randn(5, ) * 10
+    coeffs_rands = np.random.randn(5, ) * 10
 
     test_domain = np.arange(limits[0], limits[1], step)
 
@@ -56,10 +132,10 @@ def test_cross_product_gradient(limits, step):
     for z in test_domain:
         v1_cross_v2_last = v1_cross_v2
 
-        v1 = np.array([(z ** 2) + (rands[1] * z), (-6 * (z ** 2)) + (12 * z), rands[0] * z])
-        dv1 = np.array([(2 * z) + rands[1], (-12 * z) + 12, rands[0]])
-        v2 = np.array([(z ** 3) + 2 * z, -2 * z, -rands[4] * z])
-        dv2 = np.array([(3 * (z ** 2)) + 2, -2, -rands[4]])
+        v1 = np.array([(z ** 2) + (coeffs_rands[1] * z), (-6 * (z ** 2)) + (12 * z), coeffs_rands[0] * z])
+        dv1 = np.array([(2 * z) + coeffs_rands[1], (-12 * z) + 12, coeffs_rands[0]])
+        v2 = np.array([(z ** 3) + 2 * z, -2 * z, -coeffs_rands[4] * z])
+        dv2 = np.array([(3 * (z ** 2)) + 2, -2, -coeffs_rands[4]])
         v1_cross_v2 = np.cross(v1, v2)
 
         analytical_gradient = robot_functions.gradient_cross_product(v1, v2, dv1, dv2)
@@ -182,5 +258,7 @@ if __name__ == '__main__':
     # print("Max error of cross product gradient",test_cross_product_gradient([-1.0, 1.0], 0.0001))
     # print("Max error of norm vector gradient",test_vector_norm_gradient([-2.0, 1.0], 0.0001))
     # print("Max error of normalized cross product gradient", test_normalized_cross_product_gradient([-1.0, 1.0], 0.0001))
-    print("Max error of Hessian", test_hessian([0.0, np.pi], 0.005))
+    # print("Max error of Hessian", test_hessian([0.0, np.pi], 0.005))
+    #print("Max error of smooth max", test_smooth_max_gradient([-5.0, 5.0],0.0001))
+    print("Max error of smooth max", test_smooth_min_gradient([-5.0, 5.0],0.0001))
     # next function is getHyperplanes

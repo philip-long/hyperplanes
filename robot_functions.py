@@ -1,5 +1,19 @@
 import numpy as np
+from scipy.special import logsumexp
 
+
+def smooth_max(a):
+    return logsumexp(a)
+
+def smooth_max_gradient(a):
+    # http://eprints.maths.manchester.ac.uk/2728/1/paper.pdf
+    return np.exp(a)/sum(np.exp(a))
+
+def exp_normalize(x):
+    # a normalized version of smooth max gradient which can cope with large differences such as A=[1,10,1000]
+    b = x.max()
+    y = np.exp(x - b)
+    return y / y.sum()
 
 def sigmoid(z, a=1.0):
     # Continuous Sigmoid function returns 0 if z is negative and 1 if positive.
