@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import logsumexp
-
+import itertools
 
 def smooth_max(a):
     return logsumexp(a)
@@ -112,3 +112,15 @@ def getHessian(J):
                 a = np.vstack([a_rows13, a_rows36])
                 H[:, i, j] = np.matmul(a, twist_i)
     return H
+
+def getDofCombinations(active_joints,m):
+    # % We select m-1 independent twists that define m contained in N
+    # %    the rest n-(m-1) are contained in N-1
+    # % This is repeated for all combinations and pairs are corresponding rows in
+    # % N and Nnot
+
+    N=np.array(list(itertools.combinations(active_joints, m-1)))
+    Nnot = np.zeros([np.shape(N)[0],len(active_joints)-(m-1)])
+    for i in range(np.shape(N)[0]):
+        Nnot[i,:]=active_joints[~np.isin(active_joints,N[i,:])]# isin returns boolean array of intersection, ~ invert and then selects
+    return N,Nnot

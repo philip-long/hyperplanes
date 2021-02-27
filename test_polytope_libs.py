@@ -207,6 +207,7 @@ def test_normalized_cross_product_gradient(limits, step):
         dv2 = np.array([(3 * (z ** 2)) + 2, -2, -rands[4]])
 
         v1_cross_v2_normalized = robot_functions.cross_product_normalized(v1, v2)
+
         analytical_gradient = robot_functions.gradient_cross_product_normalized(v1, v2, dv1, dv2)
         numerical_gradient = ((v1_cross_v2_normalized - v1_cross_v2_normalized_last) / step)
 

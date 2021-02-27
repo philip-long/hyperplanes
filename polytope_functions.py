@@ -12,6 +12,7 @@ def get_Cartesian_polytope(jacobian,joint_space_vrep):
         Pv[i,:]=np.matmul(jacobian,row)
     return Pv
 
+
 def plot_polytope_3d(poly):
     V = polytope.extreme(poly)
     fig = plt.figure()
