@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D # <--- This is important for 3d plotting
 from scipy.spatial import Delaunay, ConvexHull
 import polytope
 import numpy as np
@@ -28,33 +29,54 @@ def calculate_cable_length(wld_position_base_pts_, wld_pose_tool_, tool_position
     return normalized_cable_vectors_, cable_vectors_, cable_lengths_
 
 
-def wrench_matrix(normalized_cable_vectors_,wld_pose_tool_,tool_position_plat_pts_):
+def wrench_matrix(wld_position_base_pts_, wld_pose_tool_, tool_position_plat_pts_):
     """
-    :param tool_position_plat_pts_:
-    :param wld_pose_tool_:
-    :param normalized_cable_vectors_
-    :return: wrench matrix
-    """
-    W = np.zeros([6, 8])
-    for count, c_i in enumerate(normalized_cable_vectors_):
 
-        W[0:3, count] = c_i
-        W[3:6, count] = c_i
+    :param wld_position_base_pts_: positions of base attachment point in world
+    :param wld_pose_tool_: Transformation matrix of platform attachment point in world
+    :param tool_position_plat_pts_: positions of base attachment point in tool frame
+    :return: Wrench Matrix
+    """
+
+    p = wld_pose_tool_[0:3, 3]
+    W = np.zeros([6, 8])
+    for count, (a, r) in enumerate(zip(wld_position_base_pts_, tool_position_plat_pts_)):
+        # https://hal.archives-ouvertes.fr/hal-01941785/document eq. 1
+        world_position_plat_pts_ = np.matmul(wld_pose_tool_[0:3, 0:3], r)
+        cable_vec_ = (a - p - world_position_plat_pts_)
+        cable_vec_normalized = cable_vec_ / np.linalg.norm(cable_vec_)
+        W[0:3, count] = cable_vec_normalized
+        W[3:6, count] = np.cross(world_position_plat_pts_, cable_vec_normalized)
     return W
 
 
-def tension_space_polytope(t_min_, t_max_):
+def tension_space_polytope(t_min_, t_max_, n):
     """
+    :param n: number of cables
     :param t_min_: minimum allowable tension value
     :param t_max_: maxmimum allowable tension value
     :return: tension space polytope
     """
-    A_desired = np.vstack((np.eye(4, 4), -1 * np.eye(4, 4)))
-    B_desired = np.vstack((t_max_ * np.ones([4, 1]), -t_min_ * np.ones([4, 1])))
+    A_desired = np.vstack((np.eye(n, n), -1 * np.eye(n, n)))
+    B_desired = np.vstack((t_max_ * np.ones([n, 1]), -t_min_ * np.ones([n, 1])))
     tension_space_Hrep = polytope.Polytope(A_desired, B_desired)
     tension_space_Vrep = polytope.extreme(tension_space_Hrep)
     return tension_space_Vrep
 
+def get_Cartesian_polytope2(W, tension_space_Vrep):
+    """
+    :param W: Wrench matrix
+    :param tension_space_Vrep: tension space poltope vertices
+    :return: Wrench space vertices
+    """
+
+    # for each vertex in the tension space project to Wrench space using the wrench matrix
+    Pv = np.zeros([np.shape(tension_space_Vrep)[0], np.shape(W)[0]])
+
+    for row, i in zip(tension_space_Vrep, range(np.shape(tension_space_Vrep)[0])):
+        Pv[i, :] = np.matmul(W, row)
+    polyhull = polytope.qhull(Pv)
+    return polyhull
 
 def get_Cartesian_polytope(W, tension_space_Vrep):
     """
@@ -71,9 +93,14 @@ def get_Cartesian_polytope(W, tension_space_Vrep):
     hull = ConvexHull(Pv, qhull_options='Qs QJ')
     return hull
 
+def point_in_hull2(point, polyhull, tolerance=1e-12):
+    #    https: // stackoverflow.com / questions / 16750618 / whats - an - efficient - way - to - find - if -a - point - lies - in -the - convex - hull - of - a - point - cl / 42165596  # 42165596
+    return all(
+        (np.dot(eq, point) - polyhull.b[count] <= tolerance)
+        for count, eq in enumerate(polyhull.A))
 
 def point_in_hull(point, hull, tolerance=1e-12):
-    #    https: // stackoverflow.com / questions / 16750618 / whats - an - efficient - way - to - find - if -a - point - lies - in -the - convex - hull - of - a - point - cl / 42165596  # 42165596
+    #    https://stackoverflow.com/questions/16750618/whats-an-efficient-way-to- find-if-a-point-lies - in -the - convex - hull - of - a - point - cl / 42165596  # 42165596
     return all(
         (np.dot(eq[:-1], point) + eq[-1] <= tolerance)
         for eq in hull.equations)
@@ -147,38 +174,45 @@ def rotate_platform_points(world_pose_tool, tool_position_plat_pts):
 
 # Simple workspace analysis for 8 cable suspended Cartesian CDPR robot
 if __name__ == '__main__':
+
     wld_position_base_pts = get_base_attachment_points()  # The positions of the base attachment points
     tool_position_plat_pts = get_platform_attachment_points(0.4, 0.3,
                                                             0.2)  # The positions of the end effector attachment points
-    minimum_wrench = np.array([0.5, 0.5, -3.0 * 9.81])  # lets say platform must support it's weight of 2kg
+    minimum_wrench = np.array([0.0, 0.0, 5.0 * 9.81])  # lets say platform must support it's weight of 2kg
+
 
     # max and min cable limits
     t_max = 20  # maximum cable tension found form motors
     t_min = 2  # need to ensure cable tension is above zero
     tension_space_Vrep = tension_space_polytope(t_min,
-                                                t_max)  # this defines a 'box' in tension space that has all feasible tensions
+                                                t_max,8)  # this defines a 'box' in tension space that has all feasible tensions
+
 
     # An end effector position
     wld_pose_tool = transformations.euler_matrix(0.0, 0.0, 0.2)
     wld_pose_tool[0:3, 3] = [0.5, 0.5, 0.5]  # Where the platform is at the moment
-    # wTp=transform_platform_points(wTe)
 
-    normalized_cable_vectors, cable_vectors, cable_lengths = calculate_cable_length(wld_position_base_pts,
-                                                                                    wld_pose_tool,
-                                                                                    tool_position_plat_pts
-                                                                                    )
+    W = wrench_matrix(wld_position_base_pts,
+                      wld_pose_tool,
+                      tool_position_plat_pts)  # Wt + we=0 https://hal.archives-ouvertes.fr/hal-01941785/document
 
-    # W = wrench_matrix(normalized_cable_vectors)  # Wt + we=0 https://hal.archives-ouvertes.fr/hal-01941785/document
-    # AWS = get_Cartesian_polytope(W, tension_space_Vrep)
+
+
+    AWS = get_Cartesian_polytope(W[0:3,:], tension_space_Vrep)
+
+   # polyhull = get_Cartesian_polytope2(W[0:3, :], tension_space_Vrep)
+   # print("Is the platform able to support itself?", point_in_hull2(minimum_wrench, polyhull))
+
+
     # # This returns plot all the forces that the platform can support in it's current position
     # # Uncomment to plot
-    # # ax = plot_polytope_3d(AWS)
-    # print("Is the platform able to support itself?", point_in_hull(minimum_wrench, AWS))
+    ax = plot_polytope_3d(AWS)
+    print("Is the platform able to support itself?", point_in_hull(minimum_wrench, AWS))
     # # Uncomment to plot
-    # # ax.plot([minimum_wrench[0]], [minimum_wrench[1]], [minimum_wrench[2]], markerfacecolor = 'k', markeredgecolor = 'k', marker = 'o', markersize = 10)
+    ax.plot([minimum_wrench[0]], [minimum_wrench[1]], [minimum_wrench[2]], markerfacecolor = 'k', markeredgecolor = 'k', marker = 'o', markersize = 10)
     #
     # # Plot shows wrench space capacities and the minimum wrench
-    # # plt.show()
+    plt.show()
     #
     # # =================== Plot the workspace ========================= #
     # # Check if force is within convex hull

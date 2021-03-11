@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D # <--- This is important for 3d plotting
 from scipy.spatial import Delaunay, ConvexHull
 import polytope
 import numpy as np
@@ -57,10 +58,15 @@ def get_Cartesian_polytope(W,tension_space_Vrep):
     for row,i in zip(tension_space_Vrep,range(np.shape(tension_space_Vrep)[0])):
         Pv[i,:]=np.matmul(W,row)
     hull = ConvexHull(Pv, qhull_options='Qs QJ')
-    return hull
+    polyhull=polytope.qhull(Pv)
+    return hull,polyhull
 
 
-
+def point_in_hull2(point, polyhull, tolerance=1e-12):
+    #    https: // stackoverflow.com / questions / 16750618 / whats - an - efficient - way - to - find - if -a - point - lies - in -the - convex - hull - of - a - point - cl / 42165596  # 42165596
+    return all(
+        (np.dot(eq, point) - polyhull.b[count] <= tolerance)
+        for count, eq in enumerate(polyhull.A))
 
 def point_in_hull(point, hull, tolerance=1e-12):
     #    https: // stackoverflow.com / questions / 16750618 / whats - an - efficient - way - to - find - if -a - point - lies - in -the - convex - hull - of - a - point - cl / 42165596  # 42165596
@@ -103,7 +109,8 @@ if __name__ == '__main__':
     A3 = np.array([x_max, y_min, z_max])
     A4 = np.array([x_max, y_max, z_max])
     wTb = np.array([A1, A2, A3, A4])  # The locations of the attachment points
-    minimum_wrench = np.array([0.5, 0.5, -3.0*9.81]) # lets say platform must support it's weight of 2kg
+    minimum_wrench = np.array([-1.0, 5.5, -2.0*9.81]) # lets say platform must support it's weight of 2kg
+
 
     # max and min cable limits
     t_max = 20 # maximum cable tension found form motors
@@ -115,60 +122,68 @@ if __name__ == '__main__':
     wTp = [0.5, 0.5, 0.5]  # Where the platform is at the moment
     normalized_cable_vectors, cable_vectors, cable_lengths = calculate_cable_length(wTb, wTp)
     W = wrench_matrix(normalized_cable_vectors)     # Wt + we=0 https://hal.archives-ouvertes.fr/hal-01941785/document
-    AWS=get_Cartesian_polytope(W,tension_space_Vrep)
+    print("W", W, np.linalg.matrix_rank(W), np.linalg.cond(W))
+    AWS,polyhull=get_Cartesian_polytope(W,tension_space_Vrep)
+
+    print(AWS.points)
+
+    print(AWS.equations)
+
     # This returns plot all the forces that the platform can support in it's current position
     # Uncomment to plot
-    # ax = plot_polytope_3d(AWS)
+    ax = plot_polytope_3d(AWS)
     print("Is the platform able to support itself?",point_in_hull(minimum_wrench, AWS))
-    # Uncomment to plot
-    # ax.plot([minimum_wrench[0]], [minimum_wrench[1]], [minimum_wrench[2]], markerfacecolor = 'k', markeredgecolor = 'k', marker = 'o', markersize = 10)
+    print("Is the platform able to support itself?", point_in_hull2(minimum_wrench, polyhull))
 
-    # Plot shows wrench space capacities and the minimum wrench
-    #plt.show()
-
-    # =================== Plot the workspace ========================= #
-    # Check if force is within convex hull
-    tolerance=0.05 # can't have zero cable lentgh
-    x_space = np.linspace(x_min+tolerance,x_max-tolerance,10)
-    y_space = np.linspace(y_min+tolerance, y_max-tolerance, 10)
-    z_space = np.linspace(z_min+tolerance, z_max-tolerance, 20)
-    feasible_points = np.empty((0, 3), float)
-    for x in x_space:
-        for y in y_space:
-            for z in z_space:
-                wTp = np.array([x, y, z])  # Where the platform is at the moment
-                normalized_cable_vectors, cable_vectors, cable_lengths = calculate_cable_length(wTb, wTp)
-                W = wrench_matrix(normalized_cable_vectors)
-                AWS = get_Cartesian_polytope(W, tension_space_Vrep)
-                if( point_in_hull(minimum_wrench, AWS) ):
-                    feasible_points=np.vstack([feasible_points,wTp])
-
-    print(np.shape(feasible_points))
-
-    # wrkspace_hull = ConvexHull(feasible_points, qhull_options='Qs QJ')
-    # ax2=plot_polytope_3d(wrkspace_hull)
-
-    A1 = np.array([x_min,y_min,z_max])
-    A2 = np.array([x_min, y_max, z_max])
-    A3 = np.array([x_max, y_min, z_max])
-    A4 = np.array([x_max, y_max, z_max])
-
-    fig = plt.figure()
-    ax2 = fig.gca(projection='3d')
-    ax2.plot([A1[0],A2[0],A4[0],A3[0],A1[0]],
-              [A1[1],A2[1],A4[1],A3[1],A1[1]],
-              [A1[2],A2[2],A4[2],A3[2],A1[2]], linewidth=5,markerfacecolor = 'b', markeredgecolor = 'k', marker = 'o', markersize = 10 )
-
-    my_cmap = plt.get_cmap('hsv')
-    ax2.scatter3D(feasible_points[:,0],feasible_points[:,1],feasible_points[:,2],
-                  marker='x',
-                  c = (feasible_points[:,0]+feasible_points[:,1]+feasible_points[:,2]),
-                  cmap = my_cmap)
-    plt.title("Workspace analysis")
-    ax2.set_xlabel('X-axis', fontweight='bold')
-    ax2.set_ylabel('Y-axis', fontweight='bold')
-    ax2.set_zlabel('Z-axis', fontweight='bold')
-
-
+    # # Uncomment to plot
+    ax.plot([minimum_wrench[0]], [minimum_wrench[1]], [minimum_wrench[2]], markerfacecolor = 'k', markeredgecolor = 'k', marker = 'o', markersize = 10)
+    #
+    # # Plot shows wrench space capacities and the minimum wrench
     plt.show()
-    # Now map the space
+    #
+    # # =================== Plot the workspace ========================= #
+    # # Check if force is within convex hull
+    # tolerance=0.05 # can't have zero cable lentgh
+    # x_space = np.linspace(x_min+tolerance,x_max-tolerance,10)
+    # y_space = np.linspace(y_min+tolerance, y_max-tolerance, 10)
+    # z_space = np.linspace(z_min+tolerance, z_max-tolerance, 20)
+    # feasible_points = np.empty((0, 3), float)
+    # for x in x_space:
+    #     for y in y_space:
+    #         for z in z_space:
+    #             wTp = np.array([x, y, z])  # Where the platform is at the moment
+    #             normalized_cable_vectors, cable_vectors, cable_lengths = calculate_cable_length(wTb, wTp)
+    #             W = wrench_matrix(normalized_cable_vectors)
+    #             AWS = get_Cartesian_polytope(W, tension_space_Vrep)
+    #             if( point_in_hull(minimum_wrench, AWS) ):
+    #                 feasible_points=np.vstack([feasible_points,wTp])
+    #
+    # print(np.shape(feasible_points))
+    #
+    # # wrkspace_hull = ConvexHull(feasible_points, qhull_options='Qs QJ')
+    # # ax2=plot_polytope_3d(wrkspace_hull)
+    #
+    # A1 = np.array([x_min,y_min,z_max])
+    # A2 = np.array([x_min, y_max, z_max])
+    # A3 = np.array([x_max, y_min, z_max])
+    # A4 = np.array([x_max, y_max, z_max])
+    #
+    # fig = plt.figure()
+    # ax2 = fig.gca(projection='3d')
+    # ax2.plot([A1[0],A2[0],A4[0],A3[0],A1[0]],
+    #           [A1[1],A2[1],A4[1],A3[1],A1[1]],
+    #           [A1[2],A2[2],A4[2],A3[2],A1[2]], linewidth=5,markerfacecolor = 'b', markeredgecolor = 'k', marker = 'o', markersize = 10 )
+    #
+    # my_cmap = plt.get_cmap('hsv')
+    # ax2.scatter3D(feasible_points[:,0],feasible_points[:,1],feasible_points[:,2],
+    #               marker='x',
+    #               c = (feasible_points[:,0]+feasible_points[:,1]+feasible_points[:,2]),
+    #               cmap = my_cmap)
+    # plt.title("Workspace analysis")
+    # ax2.set_xlabel('X-axis', fontweight='bold')
+    # ax2.set_ylabel('Y-axis', fontweight='bold')
+    # ax2.set_zlabel('Z-axis', fontweight='bold')
+    #
+    #
+    # plt.show()
+    # # Now map the space
