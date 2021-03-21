@@ -3,7 +3,8 @@ from mpl_toolkits.mplot3d import Axes3D # <--- This is important for 3d plotting
 from scipy.spatial import Delaunay, ConvexHull
 import polytope
 import numpy as np
-from tf import transformations
+#from tf import transformations
+
 
 
 def calculate_cable_length(wld_position_base_pts_, wld_pose_tool_, tool_position_plat_pts_):
@@ -49,6 +50,24 @@ def wrench_matrix(wld_position_base_pts_, wld_pose_tool_, tool_position_plat_pts
         W[3:6, count] = np.cross(world_position_plat_pts_, cable_vec_normalized)
     return W
 
+def sub_wrench_matrix(wld_position_base_pts_, wld_pose_tool_):
+    """
+
+    :param wld_position_base_pts_: positions of base attachment point in world
+    :param wld_pose_tool_: Transformation matrix of platform attachment point in world
+    :param tool_position_plat_pts_: positions of base attachment point in tool frame
+    :return: Wrench Matrix
+    """
+
+    p = wld_pose_tool_[0:3, 3]
+    W = np.zeros([3, 4])
+    for count, a in enumerate(wld_position_base_pts_):
+        # https://hal.archives-ouvertes.fr/hal-01941785/document eq. 1
+
+        cable_vec_ = (a - p)
+        cable_vec_normalized = cable_vec_ / np.linalg.norm(cable_vec_)
+        W[0:3, count] = cable_vec_normalized
+    return W
 
 def tension_space_polytope(t_min_, t_max_, n):
     """
@@ -99,7 +118,7 @@ def point_in_hull2(point, polyhull, tolerance=1e-12):
         (np.dot(eq, point) - polyhull.b[count] <= tolerance)
         for count, eq in enumerate(polyhull.A))
 
-def point_in_hull(point, hull, tolerance=1e-12):
+def point_in_hull(point, hull, tolerance=1e-7):
     #    https://stackoverflow.com/questions/16750618/whats-an-efficient-way-to- find-if-a-point-lies - in -the - convex - hull - of - a - point - cl / 42165596  # 42165596
     return all(
         (np.dot(eq[:-1], point) + eq[-1] <= tolerance)
@@ -128,15 +147,26 @@ def plot_polytope_3d(hull):
     return ax
 
 
-def get_base_attachment_points():
+def get_sub_base_attachment_points(platform_origin_x,platform_origin_y,platform_origin_z,
+        platform_width,platform_breadth):
     # Base pulley points let's say a van of dimensions 3x2x
-    x_max = 3.5
+
+    A1 = np.array([platform_origin_x, platform_origin_y, platform_origin_z])
+    A2 = np.array([platform_origin_x, platform_origin_y+platform_breadth, platform_origin_z])
+    A3 = np.array([platform_origin_x+platform_width, platform_origin_y+platform_breadth, platform_origin_z])
+    A4 = np.array([platform_origin_x+platform_width, platform_origin_y, platform_origin_z])
+
+    return np.array([A1, A2, A3, A4])
+
+def get_base_attachment_points(x_max,y_max,z_max):
+    # Base pulley points let's say a van of dimensions 3x2x
+
     x_min = 0.0
     x_delta = 0.2
-    y_max = 2.0
+
     y_min = 0.0
-    y_delta = 0.1
-    z_max = 2.2
+    y_delta = 0.0
+
     z_min = 0.0
     A1 = np.array([x_min, y_min, z_max])
     A2 = np.array([x_min, y_max, z_max])
@@ -153,16 +183,16 @@ def get_base_attachment_points():
 def get_platform_attachment_points(x_width, y_width, z_width):
     # Base pulley points let's say a van of dimensions 3x2x
 
-    A1 = np.array([0., 0., 0.])
-    A2 = np.array([x_width, 0., z_width])
-    A3 = np.array([x_width, 0., 0.0])
-    A4 = np.array([0., 0., z_width])
+    B1 = np.array([0., 0., 0.])
+    B2 = np.array([x_width, 0., z_width])
+    B3 = np.array([x_width, 0., 0.0])
+    B4 = np.array([0., 0., z_width])
 
-    A5 = np.array([0., y_width, z_width])
-    A6 = np.array([x_width, y_width, z_width])
-    A7 = np.array([0., y_width, 0.0])
-    A8 = np.array([x_width, y_width, 0.0])
-    return np.array([A1, A2, A3, A4, A5, A6, A7, A8])
+    B5 = np.array([0., y_width, z_width])
+    B6 = np.array([x_width, y_width, z_width])
+    B7 = np.array([0., y_width, 0.0])
+    B8 = np.array([x_width, y_width, 0.0])
+    return np.array([B1, B2, B3, B4, B5, B6, B7, B8])
 
 
 def rotate_platform_points(world_pose_tool, tool_position_plat_pts):
@@ -171,34 +201,55 @@ def rotate_platform_points(world_pose_tool, tool_position_plat_pts):
         t[count, :] = np.matmul(world_pose_tool[0:3, 0:3], tool_t_p_i)
     return t
 
+def plot_frame(ax2,A1,A2,A3,A4,b):
+    # Plot the frame
+    if(b):
+        ax2.plot([A1[0], A2[0], A4[0], A3[0], A1[0]],
+             [A1[1], A2[1], A4[1], A3[1], A1[1]],
+             [A1[2], A2[2], A4[2], A3[2], A1[2]], 'k', linewidth=5,markerfacecolor='y', markeredgecolor='k', marker='o',
+             markersize=5)
+    else:
+        ax2.plot([A1[0], A2[0], A4[0], A3[0], A1[0]],
+             [A1[1], A2[1], A4[1], A3[1], A1[1]],
+             [A1[2], A2[2], A4[2], A3[2], A1[2]], markerfacecolor='y', markeredgecolor='k', marker='o',
+             markersize=5)
+
+    return ax2
 
 # Simple workspace analysis for 8 cable suspended Cartesian CDPR robot
 if __name__ == '__main__':
+    x_max = 5.5
+    y_max = 2.5
+    z_max = 2.1
 
-    wld_position_base_pts = get_base_attachment_points()  # The positions of the base attachment points
+    wld_position_base_pts = get_base_attachment_points(x_max,y_max,z_max)  # The positions of the base attachment points
     tool_position_plat_pts = get_platform_attachment_points(0.4, 0.3,
                                                             0.2)  # The positions of the end effector attachment points
-    minimum_wrench = np.array([0.0, 0.0, 5.0 * 9.81])  # lets say platform must support it's weight of 2kg
+    minimum_wrench = np.array([0.0, 0.0, 10.0 * 9.81])  # lets say platform must support it's weight of 10kg includes docking forces
+
+    minimum_wrench_sub = np.array(
+        [0.0, 0.0, 5.0 * 9.81])  # lets say platform must support it's weight of 10kg includes docking forces
 
 
     # max and min cable limits
-    t_max = 20  # maximum cable tension found form motors
+    t_max = 120  # maximum cable tension found form motors
     t_min = 2  # need to ensure cable tension is above zero
     tension_space_Vrep = tension_space_polytope(t_min,
                                                 t_max,8)  # this defines a 'box' in tension space that has all feasible tensions
 
-
+    tension_space_Vrep_sub = tension_space_polytope(t_min,
+                                                t_max-50,4)  # this defines a 'box' in tension space that has all feasible tensions
     # An end effector position
-    wld_pose_tool = transformations.euler_matrix(0.0, 0.0, 0.2)
+    wld_pose_tool = np.identity(4)#.euler_matrix(0.0, 0.0, 0.2)
     wld_pose_tool[0:3, 3] = [0.5, 0.5, 0.5]  # Where the platform is at the moment
+    #
+    # W = wrench_matrix(wld_position_base_pts,
+    #                   wld_pose_tool,
+    #                   tool_position_plat_pts)  # Wt + we=0 https://hal.archives-ouvertes.fr/hal-01941785/document
 
-    W = wrench_matrix(wld_position_base_pts,
-                      wld_pose_tool,
-                      tool_position_plat_pts)  # Wt + we=0 https://hal.archives-ouvertes.fr/hal-01941785/document
 
 
-
-    AWS = get_Cartesian_polytope(W[0:3,:], tension_space_Vrep)
+   # AWS = get_Cartesian_polytope(W[0:3,:], tension_space_Vrep)
 
    # polyhull = get_Cartesian_polytope2(W[0:3, :], tension_space_Vrep)
    # print("Is the platform able to support itself?", point_in_hull2(minimum_wrench, polyhull))
@@ -206,57 +257,103 @@ if __name__ == '__main__':
 
     # # This returns plot all the forces that the platform can support in it's current position
     # # Uncomment to plot
-    ax = plot_polytope_3d(AWS)
-    print("Is the platform able to support itself?", point_in_hull(minimum_wrench, AWS))
+    #ax = plot_polytope_3d(AWS)
+    #print("Is the platform able to support itself?", point_in_hull(minimum_wrench, AWS))
     # # Uncomment to plot
-    ax.plot([minimum_wrench[0]], [minimum_wrench[1]], [minimum_wrench[2]], markerfacecolor = 'k', markeredgecolor = 'k', marker = 'o', markersize = 10)
+    #ax.plot([minimum_wrench[0]], [minimum_wrench[1]], [minimum_wrench[2]], markerfacecolor = 'k', markeredgecolor = 'k', marker = 'o', markersize = 10)
     #
     # # Plot shows wrench space capacities and the minimum wrench
-    plt.show()
+    #plt.show()
     #
     # # =================== Plot the workspace ========================= #
+    x_min = 0.2
+    y_min = 0.2
+    z_min = 0.2
+
     # # Check if force is within convex hull
-    # tolerance = 0.05  # can't have zero cable lentgh
-    # x_space = np.linspace(x_min + tolerance, x_max - tolerance, 10)
-    # y_space = np.linspace(y_min + tolerance, y_max - tolerance, 10)
-    # z_space = np.linspace(z_min + tolerance, z_max - tolerance, 20)
-    # feasible_points = np.empty((0, 3), float)
-    # for x in x_space:
-    #     for y in y_space:
-    #         for z in z_space:
-    #             wTp = np.array([x, y, z])  # Where the platform is at the moment
-    #             normalized_cable_vectors, cable_vectors, cable_lengths = calculate_cable_length(wTb, wTp)
-    #             W = wrench_matrix(normalized_cable_vectors)
-    #             AWS = get_Cartesian_polytope(W, tension_space_Vrep)
-    #             if (point_in_hull(minimum_wrench, AWS)):
-    #                 feasible_points = np.vstack([feasible_points, wTp])
-    #
-    # print(np.shape(feasible_points))
-    #
-    # # wrkspace_hull = ConvexHull(feasible_points, qhull_options='Qs QJ')
-    # # ax2=plot_polytope_3d(wrkspace_hull)
-    #
-    # A1 = np.array([x_min, y_min, z_max])
-    # A2 = np.array([x_min, y_max, z_max])
-    # A3 = np.array([x_max, y_min, z_max])
-    # A4 = np.array([x_max, y_max, z_max])
-    #
-    # fig = plt.figure()
-    # ax2 = fig.gca(projection='3d')
+    tolerance = 0.075  # can't have zero cable lentgh
+    x_space = np.linspace(x_min , x_max - 0.1, 10)
+    y_space = np.linspace(y_min , y_max - 0.3, 9)
+    z_space = np.linspace(z_min , z_max - 0.1, 15)
+    feasible_points = np.empty((0, 3), float)
+    for x in x_space:
+        for y in y_space:
+            for z in z_space:
+                wld_pose_tool[0:3, 3] =  np.array([x, y, z])  # Where the platform is at the moment
+
+                W = wrench_matrix(wld_position_base_pts,
+                                  wld_pose_tool,
+                                  tool_position_plat_pts)  # Wt + we=0 https://hal.archives-ouvertes.fr/hal-01941785/document
+
+                AWS = get_Cartesian_polytope(W[0:3,:], tension_space_Vrep)
+                if (point_in_hull(minimum_wrench, AWS)):
+                    feasible_points = np.vstack([feasible_points, wld_pose_tool[0:3, 3] ])
+
+
+
+    # Now do the sub robot
+    docked_platform_origin_x=2.5
+    docked_platform_origin_y=0.75
+    docked_platform_origin_z=1.6
+    platform_width=   0.6
+    platform_breadth= 0.6
+    platform_height= 0.2
+
     # ax2.plot([A1[0], A2[0], A4[0], A3[0], A1[0]],
-    #          [A1[1], A2[1], A4[1], A3[1], A1[1]],
-    #          [A1[2], A2[2], A4[2], A3[2], A1[2]], linewidth=5, markerfacecolor='b', markeredgecolor='k', marker='o',
-    #          markersize=10)
-    #
-    # my_cmap = plt.get_cmap('hsv')
-    # ax2.scatter3D(feasible_points[:, 0], feasible_points[:, 1], feasible_points[:, 2],
-    #               marker='x',
-    #               c=(feasible_points[:, 0] + feasible_points[:, 1] + feasible_points[:, 2]),
-    #               cmap=my_cmap)
-    # plt.title("Workspace analysis")
-    # ax2.set_xlabel('X-axis', fontweight='bold')
-    # ax2.set_ylabel('Y-axis', fontweight='bold')
-    # ax2.set_zlabel('Z-axis', fontweight='bold')
-    #
-    # plt.show()
+    #      [A1[1], A2[1], A4[1], A3[1], A1[1]],
+    #      [A1[2], A2[2], A4[2], A3[2], A1[2]], 'k', linewidth=5, markerfacecolor='y', markeredgecolor='k', marker='o',
+    #      markersize=5)
+
+
+    sub_wld_position_base_pts = get_sub_base_attachment_points(docked_platform_origin_x,docked_platform_origin_y,docked_platform_origin_z,
+        platform_width,platform_breadth)
+
+    x_space = np.linspace(docked_platform_origin_x, docked_platform_origin_x + platform_width, 12)
+    y_space = np.linspace(docked_platform_origin_y, docked_platform_origin_y + platform_breadth, 12)
+    z_space = np.linspace(z_min, docked_platform_origin_z - 0.1, 10)
+
+    feasible_points_sub = np.empty((0, 3), float)
+    for x in x_space:
+        for y in y_space:
+            for z in z_space:
+                wld_pose_tool[0:3, 3] = np.array([x, y, z])  # Where the platform is at the moment
+
+                W = sub_wrench_matrix(sub_wld_position_base_pts,
+                                  wld_pose_tool)  # Wt + we=0 https://hal.archives-ouvertes.fr/hal-01941785/document
+                AWS = get_Cartesian_polytope(W, tension_space_Vrep_sub)
+                if (point_in_hull(minimum_wrench_sub, AWS)):
+                    feasible_points_sub = np.vstack([feasible_points_sub, wld_pose_tool[0:3, 3]])
+
+
+
+    # Plotting the oevrall workspace
+
+    print("np.shape(tension_space_Vrep)",np.shape(tension_space_Vrep))
+    print("np.shape(sub_tension_space_Vrep)", np.shape(tension_space_Vrep_sub))
+    fig = plt.figure()
+    ax2 = fig.gca(projection='3d')
+    fig.subplots_adjust(top=1, bottom=0, left=0, right=1, wspace=0)
+    # Plot the frame
+
+    plot_frame(ax2, wld_position_base_pts[0], wld_position_base_pts[1], wld_position_base_pts[2],
+               wld_position_base_pts[3],True)
+
+    ax2.scatter3D(feasible_points[:, 0], feasible_points[:, 1], feasible_points[:, 2],
+                  marker='*'
+                  )
+    plt.title("Wrench Feasible Workspace")
+    ax2.set_xlabel('X-axis [m]' , fontweight='bold')
+    ax2.set_ylabel('Y-axis [m]', fontweight='bold')
+    ax2.set_zlabel('Z-axis [m]', fontweight='bold')
+
+    # Plot the sub frame
+    plot_frame(ax2, wld_position_base_pts[4], wld_position_base_pts[5], wld_position_base_pts[6],
+               wld_position_base_pts[7],False)
+    plot_frame(ax2, sub_wld_position_base_pts[0],sub_wld_position_base_pts[1],sub_wld_position_base_pts[3],sub_wld_position_base_pts[2],True)
+
+    ax2.scatter3D(feasible_points_sub[:, 0], feasible_points_sub[:, 1], feasible_points_sub[:, 2],
+                  marker='o'
+                  )
+
+    plt.show()
     # # Now map the space
