@@ -38,7 +38,6 @@ def test_smooth_min_gradient(limits, step):
 
         num_max=np.min(v1)
         smooth_max=robot_functions.smooth_max(-v1)
-        print("smooth_min",-smooth_max,num_max)
 
         if not first_iteration:
             analytical_gradient = robot_functions.exp_normalize(-v1)

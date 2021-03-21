@@ -13,9 +13,9 @@ def print_hi(name):
 if __name__ == '__main__':
 
     sigmoid_slope = 200
-    q = np.array([0.5,0.5,0.5,0.3,0.1,0.6,0.9])
-    qdot_max = np.ones([7,])*4.0
-    qdot_min = np.ones([7,])*2.0
+    q = np.array([0.9,0.5,0.5,0.3,-0.13,0.6,0.9])
+    qdot_max = np.ones([7,])*200.0
+    qdot_min = np.ones([7,])*-50.0
     deltaq=qdot_max-qdot_min
     print(deltaq)
 
@@ -44,7 +44,15 @@ if __name__ == '__main__':
                          [-0.30000, 0.50000, 0.50000],
                          [-0.30000, -0.10000, 0.50000],
                          [-0.30000, 0.50000, -0.60000],
+                         [-0.30000, 0.450000, -0.62000],
                          [-0.30000, -0.10000, -0.60000]])
 
-    Gamma_plus2,Gamma_minus2,d_Gamma_plus_dq2,d_Gamma_minus_dq2=polytope_functions.get_gamma(JE,H,qdot_max,qdot_min,vertices,sigmoid_slope)
+    Gamma_plus,Gamma_minus,d_Gamma_plus_dq,d_Gamma_minus_dq=polytope_functions.get_gamma(JE,H,qdot_max,qdot_min,vertices,sigmoid_slope)
+    gamma_hat=polytope_functions.get_gamma_hat(JE,H,qdot_max,qdot_min,vertices,sigmoid_slope)
+    Gamma_all = np.vstack([-Gamma_plus, Gamma_minus])  # Stacking
+    ind = np.unravel_index(np.argmax(Gamma_all, axis=None), Gamma_all.shape)  # Get's the index of the minimum value
+    print("Gamma_all[ind]=",Gamma_all[ind])
+    print("Gamma_all[ind]=", np.min(-Gamma_all))
+    print("gamma_hat=", gamma_hat)
 
+    #print(d_Gamma_plus_dq2,np.shape(d_Gamma_plus_dq2))

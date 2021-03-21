@@ -5,13 +5,12 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay, ConvexHull
 import itertools
 
-def get_Cartesian_polytope(jacobian,joint_space_vrep):
 
+def get_Cartesian_polytope(jacobian, joint_space_vrep):
+    Pv = np.zeros([np.shape(joint_space_vrep)[0], np.shape(jacobian)[0]])
 
-    Pv=np.zeros([np.shape(joint_space_vrep)[0],np.shape(jacobian)[0]])
-
-    for row,i in zip(joint_space_vrep,range(np.shape(joint_space_vrep)[0])):
-        Pv[i,:]=np.matmul(jacobian,row)
+    for row, i in zip(joint_space_vrep, range(np.shape(joint_space_vrep)[0])):
+        Pv[i, :] = np.matmul(jacobian, row)
     return Pv
 
 
@@ -30,6 +29,7 @@ def plot_polytope_3d(poly):
     plt.show()
     return ax
 
+
 def point_in_hull(point, hull, tolerance=1e-12):
     #    https: // stackoverflow.com / questions / 16750618 / whats - an - efficient - way - to - find - if -a - point - lies - in -the - convex - hull - of - a - point - cl / 42165596  # 42165596
     return all(
@@ -37,7 +37,7 @@ def point_in_hull(point, hull, tolerance=1e-12):
         for eq in hull.equations)
 
 
-def get_hyperplane_parameters(JE,H,deltaq,sigmoid_slope=1):
+def get_hyperplane_parameters(JE, H, deltaq, sigmoid_slope=1):
     # %getHyperplanes Gets the hyperplanes parameters
     # %   gets the parameters that can be used to construct the cartesian
     # %   velocitity polytopes using hyperplane method as well as their gradients,
@@ -110,10 +110,11 @@ def get_hyperplane_parameters(JE,H,deltaq,sigmoid_slope=1):
 
             hplus[i] = hplus[i] + (robot_functions.sigmoid(nt_dot_vk, sigmoid_slope)) * (deltaq[Nnot[i, j]] * nt_dot_vk)
             hminus[i] = hminus[i] + (robot_functions.sigmoid(nt_dot_vk, -sigmoid_slope)) * (
-                        deltaq[Nnot[i, j]] * nt_dot_vk)
-    return n,hplus,hminus,d_n_dq,d_hplus_dq,d_hminus_dq
+                    deltaq[Nnot[i, j]] * nt_dot_vk)
+    return n, hplus, hminus, d_n_dq, d_hplus_dq, d_hminus_dq
 
-def get_reduced_hyperplane_parameters(JE,deltaq,active_joints,sigmoid_slope=1):
+
+def get_reduced_hyperplane_parameters(JE, deltaq, active_joints, sigmoid_slope=1):
     # %getHyperplanes Gets the hyperplanes parameters
     # %   gets the parameters that can be used to construct the cartesian
     # %   velocitity polytopes using hyperplane method as well as their gradients,
@@ -129,14 +130,10 @@ def get_reduced_hyperplane_parameters(JE,deltaq,active_joints,sigmoid_slope=1):
     hplus = np.zeros([number_of_combinations, ])
     hminus = np.zeros([number_of_combinations, ])
 
-
-
     v1 = np.zeros([3, ])
     v2 = np.zeros([3, ])
 
-
     vk = np.zeros([3, ])
-
 
     for i in range(np.shape(N)[0]):
         v1 = JE[:, N[i, 0]]
@@ -147,28 +144,50 @@ def get_reduced_hyperplane_parameters(JE,deltaq,active_joints,sigmoid_slope=1):
         hminus[i] = 0
 
         for j in range(number_of_joints - (m - 1)):
-
             vk = JE[:, Nnot[i, j]]
             nt_dot_vk = np.matmul(vk, n[i, :])
 
             hplus[i] = hplus[i] + (robot_functions.sigmoid(nt_dot_vk, sigmoid_slope)) * (deltaq[Nnot[i, j]] * nt_dot_vk)
             hminus[i] = hminus[i] + (robot_functions.sigmoid(nt_dot_vk, -sigmoid_slope)) * (
-                        deltaq[Nnot[i, j]] * nt_dot_vk)
+                    deltaq[Nnot[i, j]] * nt_dot_vk)
     return n, hplus, hminus
 
-def get_gamma(JE,H,qdot_max,qdot_min,vertices,sigmoid_slope):
 
+# This function hasn't been tested at all
+def get_gamma_hat(JE, H, qdot_max, qdot_min, vertices, sigmoid_slope):
+    number_of_joints = np.shape(JE)[1]
+    d_gamma_hat_dq = np.zeros([number_of_joints, ])
+
+    Gamma_plus, Gamma_minus, d_Gamma_plus_dq, d_Gamma_minus_dq = get_gamma(JE, H, qdot_max, qdot_min, vertices,
+                                                                           sigmoid_slope)
+    # Switching the minus here since in capacity margin we get min(Gamma_plus,-Gamma_minus) so here we get max(-Gamma_plus,Gamma_minus)
+
+    Gamma_all = np.vstack([-Gamma_plus, Gamma_minus]) #  Stacking
+    d_Gamma_all_dq = np.vstack([-d_Gamma_plus_dq, d_Gamma_minus_dq])
+
+    index_of_min_value = np.unravel_index(np.argmax(Gamma_all, axis=None), Gamma_all.shape)  # Get's the index of the minimum value
+    gamma_hat = -robot_functions.smooth_max(Gamma_all)
+    # Gradient of all gammas w.r.t gamma
+    d_gamma_hat_d_gamma = robot_functions.exp_normalize(Gamma_all)
+
+    for i in range(d_Gamma_all_dq.shape[-1]):
+        # take the minimum value and multiple by it's gradient only
+        d_gamma_hat_dq[i] = d_gamma_hat_d_gamma[index_of_min_value] * d_Gamma_all_dq[index_of_min_value[0], index_of_min_value[1], i]
+    return gamma_hat, d_gamma_hat_dq
+
+
+def get_gamma(JE, H, qdot_max, qdot_min, vertices, sigmoid_slope):
     number_of_joints = np.shape(JE)[1]  # number of joints
     deltaq = qdot_max - qdot_min
 
-    n,hplus, hminus, d_n_dq, d_hplus_dq, d_hminus_dq\
+    n, hplus, hminus, d_n_dq, d_hplus_dq, d_hminus_dq \
         = get_hyperplane_parameters(JE, H, deltaq, sigmoid_slope)
 
     number_of_joints = np.shape(JE)[1]  # number of joints
-    Gamma_plus = np.zeros([np.shape(hplus)[0],np.shape(vertices)[0] ])
+    Gamma_plus = np.zeros([np.shape(hplus)[0], np.shape(vertices)[0]])
     Gamma_minus = np.zeros([np.shape(hminus)[0], np.shape(vertices)[0]])
-    d_Gamma_plus_dq = np.zeros([np.shape(hplus)[0], np.shape(vertices)[0],number_of_joints])
-    d_Gamma_minus_dq = np.zeros([np.shape(hminus)[0], np.shape(vertices)[0],number_of_joints])
+    d_Gamma_plus_dq = np.zeros([np.shape(hplus)[0], np.shape(vertices)[0], number_of_joints])
+    d_Gamma_minus_dq = np.zeros([np.shape(hminus)[0], np.shape(vertices)[0], number_of_joints])
 
     for vertex in range(np.shape(vertices)[0]):
         Gamma_plus[:, vertex] = hplus + np.matmul(np.matmul(n, JE), qdot_min) - np.matmul(n, np.transpose(
@@ -185,4 +204,4 @@ def get_gamma(JE,H,qdot_max,qdot_min,vertices,sigmoid_slope):
                                                  np.matmul(np.matmul(n, H[0:3, :, joint]), qdot_min) + (
                                                      np.matmul(d_n_dq[:, :, joint], np.transpose(vertices[vertex, :])))
 
-    return Gamma_plus,Gamma_minus,d_Gamma_plus_dq,d_Gamma_minus_dq
+    return Gamma_plus, Gamma_minus, d_Gamma_plus_dq, d_Gamma_minus_dq
