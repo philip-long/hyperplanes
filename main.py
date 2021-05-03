@@ -14,6 +14,7 @@ if __name__ == '__main__':
 
     sigmoid_slope = 200
     q = np.array([0.9,0.5,0.5,0.3,-0.13,0.6,0.9])
+    q=np.random.random(7,)
     qdot_max = np.ones([7,])*200.0
     qdot_min = np.ones([7,])*-50.0
     deltaq=qdot_max-qdot_min

@@ -7423,3 +7423,11 @@ def jacobianE0(q):
     S=robot_functions.screw_transform(np.matmul(T[0:3,0:3],end_effector_offset))
     Je=np.matmul(S,J)
     return Je
+
+def jacobianE0_trans(q):
+    end_effector_offset=np.array([0.55,0.0,0.0])
+    J=jacobian70(q)
+    T=transform_70(q)
+    S=robot_functions.screw_transform(np.matmul(T[0:3,0:3],end_effector_offset))
+    Je=np.matmul(S,J)
+    return Je[0:3,:]

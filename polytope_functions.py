@@ -154,29 +154,31 @@ def get_reduced_hyperplane_parameters(JE, deltaq, active_joints, sigmoid_slope=1
 
 
 # This function hasn't been tested at all
-def get_gamma_hat(JE, H, qdot_max, qdot_min, vertices, sigmoid_slope):
+def get_gamma_hat(JE, H, qdot_max, qdot_min, vertices, sigmoid_slope=1):
     number_of_joints = np.shape(JE)[1]
     d_gamma_hat_dq = np.zeros([number_of_joints, ])
 
     Gamma_plus, Gamma_minus, d_Gamma_plus_dq, d_Gamma_minus_dq = get_gamma(JE, H, qdot_max, qdot_min, vertices,
                                                                            sigmoid_slope)
     # Switching the minus here since in capacity margin we get min(Gamma_plus,-Gamma_minus) so here we get max(-Gamma_plus,Gamma_minus)
-
     Gamma_all = np.vstack([-Gamma_plus, Gamma_minus]) #  Stacking
     d_Gamma_all_dq = np.vstack([-d_Gamma_plus_dq, d_Gamma_minus_dq])
 
     index_of_min_value = np.unravel_index(np.argmax(Gamma_all, axis=None), Gamma_all.shape)  # Get's the index of the minimum value
+
     gamma_hat = -robot_functions.smooth_max(Gamma_all)
+
     # Gradient of all gammas w.r.t gamma
     d_gamma_hat_d_gamma = robot_functions.exp_normalize(Gamma_all)
 
     for i in range(d_Gamma_all_dq.shape[-1]):
         # take the minimum value and multiple by it's gradient only
         d_gamma_hat_dq[i] = d_gamma_hat_d_gamma[index_of_min_value] * d_Gamma_all_dq[index_of_min_value[0], index_of_min_value[1], i]
-    return gamma_hat, d_gamma_hat_dq
+
+    return gamma_hat, d_gamma_hat_dq, -np.max(Gamma_all)
 
 
-def get_gamma(JE, H, qdot_max, qdot_min, vertices, sigmoid_slope):
+def get_gamma(JE, H, qdot_max, qdot_min, vertices, sigmoid_slope=1):
     number_of_joints = np.shape(JE)[1]  # number of joints
     deltaq = qdot_max - qdot_min
 

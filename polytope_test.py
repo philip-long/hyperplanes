@@ -251,6 +251,230 @@ def test_hessian(limits,step):
     plt.show()
     return max(error)
 
+def test_gamma_versus_gammahat(limits,step):
+    q=np.random.randn(7)
+    #q = np.array([0.9, 0.5, 0.5, 0.3, -0.13, 0.6, 0.9])
+    qdot_max = np.ones([7,])*100.0
+    qdot_min = np.ones([7,])*-50.0
+    joint=np.random.randint(7)
+    test_domain = np.arange(limits[0], limits[1], step)
+
+    J=sawyer_functions.jacobianE0(q)
+    H = robot_functions.getHessian(J)
+    JE=J[0:3,:]
+
+    vertices = np.array([[0.50000, 0.50000, 0.50000],
+                         [0.50000, -0.10000, 0.50000],
+                         [0.50000, 0.50000, -0.60000],
+                         [0.50000, -0.10000, -0.60000],
+                         [-0.30000, 0.50000, 0.50000],
+                         [-0.30000, -0.10000, 0.50000],
+                         [-0.30000, 0.50000, -0.60000],
+                         [-0.30000, 0.450000, -0.62000],
+                         [-0.30000, -0.10000, -0.60000]])
+
+
+
+    m = np.shape(JE)[0]  # number of task space degrees of freedom
+    number_of_joints = np.shape(JE)[1]  # number of joints
+    active_joints = np.arange(number_of_joints)  # listing our the joints
+    N, Nnot = robot_functions.getDofCombinations(active_joints, m)
+    number_of_combinations = np.shape(N)[0]
+
+    gamma_hat_last = 0
+    Gamma_plus_last = np.zeros([number_of_combinations , np.shape(vertices)[0]])
+    Gamma_minus_last = np.zeros([number_of_combinations, np.shape(vertices)[0]])
+    gamma_err=[]
+    gh_err=[]
+    for z in test_domain:
+        J_last=JE
+
+        q[joint]=z
+        JE = sawyer_functions.jacobianE0(q)
+        H=robot_functions.getHessian(JE)
+        JE=JE[0:3,:]
+
+        gamma_hat,d_gamma_dq,gamma_all= polytope_functions.get_gamma_hat(JE, H, qdot_max, qdot_min, vertices, 200)
+        print("this should be positive gamma_hat", gamma_hat)
+        print("this should be positive gamma_all", gamma_all)
+        print("Error", gamma_all-gamma_hat)
+        gamma_hat_last=gamma_hat
+
+#    plt.show()
+    return 1
+
+def test_gamma_hat_gradient(limits,step):
+    q=np.random.randn(7)
+    #q = np.array([0.9, 0.5, 0.5, 0.3, -0.13, 0.6, 0.9])
+    qdot_max = np.ones([7,])*100.0
+    qdot_min = np.ones([7,])*-50.0
+    joint=np.random.randint(7)
+    test_domain = np.arange(limits[0], limits[1], step)
+
+    J=sawyer_functions.jacobianE0(q)
+    H = robot_functions.getHessian(J)
+    JE=J[0:3,:]
+
+    vertices = np.array([[0.50000, 0.50000, 0.50000],
+                         [0.50000, -0.10000, 0.50000],
+                         [0.50000, 0.50000, -0.60000],
+                         [0.50000, -0.10000, -0.60000],
+                         [-0.30000, 0.50000, 0.50000],
+                         [-0.30000, -0.10000, 0.50000],
+                         [-0.30000, 0.50000, -0.60000],
+                         [-0.30000, 0.450000, -0.62000],
+                         [-0.30000, -0.10000, -0.60000]])
+
+
+
+    m = np.shape(JE)[0]  # number of task space degrees of freedom
+    number_of_joints = np.shape(JE)[1]  # number of joints
+    active_joints = np.arange(number_of_joints)  # listing our the joints
+    N, Nnot = robot_functions.getDofCombinations(active_joints, m)
+    number_of_combinations = np.shape(N)[0]
+
+    gamma_hat_last = 0
+    Gamma_plus_last = np.zeros([number_of_combinations , np.shape(vertices)[0]])
+    Gamma_minus_last = np.zeros([number_of_combinations, np.shape(vertices)[0]])
+    gamma_err=[]
+    gh_err=[]
+    for z in test_domain:
+        J_last=JE
+
+        q[joint]=z
+        JE = sawyer_functions.jacobianE0(q)
+        H=robot_functions.getHessian(JE)
+        JE=JE[0:3,:]
+
+        gamma_hat,d_gamma_dq,gamma_all= polytope_functions.get_gamma_hat(JE, H, qdot_max, qdot_min, vertices, 200)
+        print("this should be positive gamma_hat", gamma_hat)
+        print("this should be positive gamma_all", gamma_all)
+        print("Gradient", d_gamma_dq)
+        print("numerical gradient", ((gamma_hat - gamma_hat_last) / step))
+        print("Gradient error", d_gamma_dq[joint] - ((gamma_hat - gamma_hat_last) / step))
+
+        #gh_err.append(np.max(d_gamma_dq[joint] - ((gamma_hat - gamma_hat_last) / step)))
+        #gamma_err.append(gamma_hat-gamma_all)
+
+        gamma_hat_last=gamma_hat
+
+#    plt.show()
+    return 1
+
+def test_hyperplanes(limits,step):
+    q=np.random.randn(7)
+    joint=np.random.randint(7)
+    test_domain = np.arange(limits[0], limits[1], step)
+    JE=sawyer_functions.jacobianE0_trans(q)
+
+    m = np.shape(JE)[0]  # number of task space degrees of freedom
+    number_of_joints = np.shape(JE)[1]  # number of joints
+    active_joints = np.arange(number_of_joints)  # listing our the joints
+    N, Nnot = robot_functions.getDofCombinations(active_joints, m)
+    number_of_combinations = np.shape(N)[0]
+
+    n_last = np.zeros([number_of_combinations, m])
+    hplus_last = np.zeros([number_of_combinations, ])
+    hminus_last = np.zeros([number_of_combinations, ])
+
+    qdot_max = np.ones([7,])*10.0
+    qdot_min = np.ones([7,])*-5.0
+    deltaq = qdot_max - qdot_min
+    error=0
+    JE = sawyer_functions.jacobianE0(q)
+    H = robot_functions.getHessian(JE)
+    JE = JE[0:3, :]
+    n, hplus, hminus, d_n_dq, d_hplus_dq, d_hminus_dq = polytope_functions.get_hyperplane_parameters(JE, H, deltaq)
+    ng_err=[]
+    hp_err=[]
+    hm_err=[]
+    for z in test_domain:
+        J_last=JE
+
+        q[joint]=z
+        JE = sawyer_functions.jacobianE0(q)
+        H=robot_functions.getHessian(JE)
+        JE=JE[0:3,:]
+        n, hplus, hminus, d_n_dq, d_hplus_dq, d_hminus_dq = polytope_functions.get_hyperplane_parameters(JE, H, deltaq)
+
+        ng_err.append(np.max(d_n_dq[:, :, joint] - ((n-n_last) / step)   ))
+        hp_err.append(np.max(d_hplus_dq[:, joint] - ((hplus - hplus_last) / step)))
+        hm_err.append(np.max(d_hminus_dq[:, joint] - ((hminus - hminus_last) / step)))
+        n_last = n
+        hplus_last = hplus
+        hminus_last = hminus
+
+
+    plt.plot(ng_err[1:], 'b')
+    plt.plot(hp_err[1:], 'r')
+    plt.plot(hm_err[1:], 'g')
+    plt.show()
+    return max([ng_err,hp_err,hm_err])
+
+
+def test_gammas_gradient(limits,step):
+    q=np.random.randn(7)
+    qdot_max = np.ones([7,])*100.0
+    qdot_min = np.ones([7,])*-50.0
+    joint=np.random.randint(7)
+
+    joint=np.random.randint(7)
+    test_domain = np.arange(limits[0], limits[1], step)
+    JE=sawyer_functions.jacobianE0_trans(q)
+
+    m = np.shape(JE)[0]  # number of task space degrees of freedom
+    number_of_joints = np.shape(JE)[1]  # number of joints
+    active_joints = np.arange(number_of_joints)  # listing our the joints
+    N, Nnot = robot_functions.getDofCombinations(active_joints, m)
+    number_of_combinations = np.shape(N)[0]
+    vertices = np.array([[0.50000, 0.50000, 0.50000],
+                         [0.50000, -0.10000, 0.50000],
+                         [0.50000, 0.50000, -0.60000],
+                         [0.50000, -0.10000, -0.60000],
+                         [-0.30000, 0.50000, 0.50000],
+                         [-0.30000, -0.10000, 0.50000],
+                         [-0.30000, 0.50000, -0.60000],
+                         [-0.30000, 0.450000, -0.62000],
+                         [-0.30000, -0.10000, -0.60000]])
+    n_last = np.zeros([number_of_combinations, m])
+    hplus_last = np.zeros([number_of_combinations, ])
+    hminus_last = np.zeros([number_of_combinations, ])
+    Gamma_plus_last= np.zeros([np.shape(hplus_last)[0], np.shape(vertices)[0]])
+    Gamma_minus_last = np.zeros([np.shape(hplus_last)[0], np.shape(vertices)[0]])
+    qdot_max = np.ones([7,])*10.0
+    qdot_min = np.ones([7,])*-5.0
+    deltaq = qdot_max - qdot_min
+    error=0
+    JE = sawyer_functions.jacobianE0(q)
+    H = robot_functions.getHessian(JE)
+    JE = JE[0:3, :]
+
+    gp_err=[]
+    gm_err=[]
+    hm_err=[]
+    for z in test_domain:
+        J_last=JE
+
+        q[joint]=z
+        JE = sawyer_functions.jacobianE0(q)
+        H=robot_functions.getHessian(JE)
+        JE=JE[0:3,:]
+        Gamma_plus, Gamma_minus, d_Gamma_plus_dq, d_Gamma_minus_dq\
+            =polytope_functions.get_gamma(JE, H, qdot_max, qdot_min, vertices,200)
+
+      #  print("max gradient error Gamma_plus",np.max(d_Gamma_plus_dq[:, :, joint] - ((Gamma_plus - Gamma_plus_last) / step)))
+      #  print("max gradient error Gamma_minus", np.max(d_Gamma_minus_dq[:, :, joint] - ((Gamma_minus - Gamma_plus_last) / step)))
+        gp_err.append(np.max(d_Gamma_plus_dq[:, :, joint] - ((Gamma_plus - Gamma_plus_last) / step)))
+        gm_err.append(np.max(d_Gamma_minus_dq[:, :, joint] - ((Gamma_minus - Gamma_minus_last) / step)))
+        Gamma_plus_last=Gamma_plus
+        Gamma_minus_last = Gamma_minus
+
+    plt.plot(gp_err[1:], 'b')
+    plt.plot(gm_err[1:], 'r')
+    plt.show()
+
+
+
 
 if __name__ == '__main__':
     # test_plot()
@@ -259,6 +483,11 @@ if __name__ == '__main__':
     # print("Max error of norm vector gradient",test_vector_norm_gradient([-2.0, 1.0], 0.0001))
     # print("Max error of normalized cross product gradient", test_normalized_cross_product_gradient([-1.0, 1.0], 0.0001))
     # print("Max error of Hessian", test_hessian([0.0, np.pi], 0.005))
-    #print("Max error of smooth max", test_smooth_max_gradient([-5.0, 5.0],0.0001))
-    print("Max error of smooth max", test_smooth_min_gradient([-5.0, 5.0],0.0001))
-    # next function is getHyperplanes
+    # print("Max error of smooth max", test_smooth_max_gradient([-5.0, 5.0],0.0001))
+    # print("Max error of smooth max", test_smooth_min_gradient([-5.0, 5.0],0.0001))
+    # print("Max error of test_hyperplanes ", test_hyperplanes([-1.0, 1.0],0.001))
+    # print("Comparison Gamma versus Gamma hat ",test_gamma_versus_gammahat([-10.0, 10.0],0.0001))
+    print("Testing gamma gradient", test_gammas_gradient([-2.0, 2.0], 0.01))
+    #  Something not right with gamma hat gradient -> check gammas hat gradient
+
+    # Applications
