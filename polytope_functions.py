@@ -17,7 +17,8 @@ def get_Cartesian_polytope(jacobian, joint_space_vrep):
 def plot_polytope_3d(poly):
     V = polytope.extreme(poly)
     fig = plt.figure()
-    ax = fig.gca(projection='3d')
+    #ax = fig.gca(projection='3d')
+    ax = fig.gca()
     hull = ConvexHull(V, qhull_options='Qs QJ')
     ax.plot(hull.points[hull.vertices, 0],
             hull.points[hull.vertices, 1],
