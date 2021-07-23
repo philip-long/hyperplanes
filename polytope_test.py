@@ -436,6 +436,9 @@ def test_gammas_gradient(limits,step):
                          [-0.30000, 0.50000, -0.60000],
                          [-0.30000, 0.450000, -0.62000],
                          [-0.30000, -0.10000, -0.60000]])
+
+    vertices = np.array([[0.50000, 0.50000, 0.50000],
+                         ])
     n_last = np.zeros([number_of_combinations, m])
     hplus_last = np.zeros([number_of_combinations, ])
     hminus_last = np.zeros([number_of_combinations, ])
@@ -454,23 +457,26 @@ def test_gammas_gradient(limits,step):
     hm_err=[]
     for z in test_domain:
         J_last=JE
-
+        print("z=",z)
         q[joint]=z
         JE = sawyer_functions.jacobianE0(q)
         H=robot_functions.getHessian(JE)
         JE=JE[0:3,:]
+        n, hplus, hminus, d_n_dq, d_hplus_dq, d_hminus_dq = polytope_functions.get_hyperplane_parameters(JE, H, deltaq,200)
+
         Gamma_plus, Gamma_minus, d_Gamma_plus_dq, d_Gamma_minus_dq\
             =polytope_functions.get_gamma(JE, H, qdot_max, qdot_min, vertices,200)
 
-      #  print("max gradient error Gamma_plus",np.max(d_Gamma_plus_dq[:, :, joint] - ((Gamma_plus - Gamma_plus_last) / step)))
-      #  print("max gradient error Gamma_minus", np.max(d_Gamma_minus_dq[:, :, joint] - ((Gamma_minus - Gamma_plus_last) / step)))
         gp_err.append(np.max(d_Gamma_plus_dq[:, :, joint] - ((Gamma_plus - Gamma_plus_last) / step)))
-        gm_err.append(np.max(d_Gamma_minus_dq[:, :, joint] - ((Gamma_minus - Gamma_minus_last) / step)))
+
+         #gm_err.append(np.max(d_Gamma_minus_dq[:, :, joint] - ((Gamma_minus - Gamma_minus_last) / step)))
         Gamma_plus_last=Gamma_plus
-        Gamma_minus_last = Gamma_minus
+        #Gamma_minus_last = Gamma_minus
+        hplus_last = hplus
+
 
     plt.plot(gp_err[1:], 'b')
-    plt.plot(gm_err[1:], 'r')
+    #plt.plot(gm_err[1:], 'r')
     plt.show()
 
 
@@ -483,11 +489,14 @@ if __name__ == '__main__':
     # print("Max error of norm vector gradient",test_vector_norm_gradient([-2.0, 1.0], 0.0001))
     # print("Max error of normalized cross product gradient", test_normalized_cross_product_gradient([-1.0, 1.0], 0.0001))
     # print("Max error of Hessian", test_hessian([0.0, np.pi], 0.005))
-    # print("Max error of smooth max", test_smooth_max_gradient([-5.0, 5.0],0.0001))
+    #print("Max error of smooth max", test_smooth_max_gradient([-5.0, 5.0],0.001))
     # print("Max error of smooth max", test_smooth_min_gradient([-5.0, 5.0],0.0001))
-    # print("Max error of test_hyperplanes ", test_hyperplanes([-1.0, 1.0],0.001))
-    # print("Comparison Gamma versus Gamma hat ",test_gamma_versus_gammahat([-10.0, 10.0],0.0001))
-    print("Testing gamma gradient", test_gammas_gradient([-2.0, 2.0], 0.01))
-    #  Something not right with gamma hat gradient -> check gammas hat gradient
+    #print("Max error of test_hyperplanes ", test_hyperplanes([-1.0, 1.0],0.01))
+    #print("Comparison Gamma versus Gamma hat ",test_gamma_versus_gammahat([-10.0, 10.0],0.0001))
+
+    print("Testing gamma gradient", test_gammas_gradient([-1.0, 0.0], 0.005))
+
+    # Something not right with the gamma gradient and I can't figure it out yet
+    # Need to verify that gamma gradient in python is same as result from octave
 
     # Applications
